@@ -28,17 +28,12 @@ extern crate simple_logger;
 use std::process;
 
 use sawtooth_sdk::consensus::zmq_driver::ZmqDriver;
+use sawtooth_sdk::consensus::engine::Engine;
 
-mod config;
-mod engine;
-mod error;
-mod message_extensions;
-mod message_type;
 mod node;
-mod pbft_log;
 mod protos;
-mod state;
-mod timing;
+mod crashing_node;
+mod normal_node;
 
 fn main() {
     let matches = clap_app!(sawtooth_pbft =>
@@ -70,18 +65,24 @@ fn main() {
 
     simple_logger::init_with_level(log_level).unwrap();
 
-    info!("Sawtooth PBFT Engine ({})", env!("CARGO_PKG_VERSION"));
+    warn!("Sawtooth PBFT Engine ({})", env!("CARGO_PKG_VERSION"));
 
-    let pbft_engine = engine::PbftEngine::new(id, dead);
     let (driver, _stop) = ZmqDriver::new();
 
-    info!("PBFT Node {} connecting to '{}'", &id, &endpoint);
+    warn!("PBFT Node {} connecting to '{}'", &id, &endpoint);
     if dead >= 0 {
-        info!("    This node will be dead after {} seconds", dead);
+        warn!("    This node will be dead after {} seconds", dead);
+        let pbft_engine = crashing_node::engine::PbftEngine::new(id, dead);
+        driver.start(&endpoint, pbft_engine).unwrap_or_else(|err| {
+            error!("{}", err);
+            process::exit(1);
+        });
+    } else {
+        let pbft_engine = normal_node::engine::PbftEngine::new(id);
+        driver.start(&endpoint, pbft_engine).unwrap_or_else(|err| {
+            error!("{}", err);
+            process::exit(1);
+        });
     }
 
-    driver.start(&endpoint, pbft_engine).unwrap_or_else(|err| {
-        error!("{}", err);
-        process::exit(1);
-    });
 }

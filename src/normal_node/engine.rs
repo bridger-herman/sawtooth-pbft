@@ -20,32 +20,24 @@ use std::time::Duration;
 
 use sawtooth_sdk::consensus::{engine::*, service::Service};
 
-use node::PbftNode;
+use node::node::PbftNode;
 
-use config;
-use timing;
+use node::config;
+use node::timing;
 
-use error::PbftError;
+use node::error::PbftError;
 
 use std::fs::File;
 use std::io::prelude::*;
 
-macro_rules! hang {
-    () => {
-        loop {}
-    };
-}
-
 pub struct PbftEngine {
     id: u64,
-    death_time: isize,
 }
 
 impl PbftEngine {
-    pub fn new(id: u64, death_time: isize) -> Self {
+    pub fn new(id: u64) -> Self {
         PbftEngine {
             id: id,
-            death_time: death_time,
         }
     }
 }
@@ -62,16 +54,6 @@ impl Engine for PbftEngine {
         let config = config::load_pbft_config(chain_head.block_id, &mut service);
 
         let mut working_ticker = timing::Ticker::new(config.block_duration);
-        let mut prev_seconds;
-        let mut death_timeout = if self.death_time >= 0 {
-            prev_seconds = self.death_time as u64;
-            Some(timing::Timeout::new(Duration::from_secs(
-                self.death_time as u64,
-            )))
-        } else {
-            prev_seconds = 0;
-            None
-        };
 
         let mut node = PbftNode::new(self.id, &config, service);
 
@@ -85,19 +67,6 @@ impl Engine for PbftEngine {
         // Event loop. Keep going until we receive a shutdown message.
         loop {
             let incoming_message = updates.recv_timeout(config.message_timeout);
-
-            if let Some(ref mut timeout) = death_timeout {
-                if timeout.is_expired() {
-                    error!("{}: I died", node.state);
-                    hang!();
-                } else {
-                    let remaining = timeout.remaining();
-                    if remaining.as_secs() != prev_seconds {
-                        prev_seconds = remaining.as_secs();
-                        debug!("{}: {} seconds until I die", node.state, prev_seconds);
-                    }
-                }
-            }
 
             let res = match incoming_message {
                 Ok(Update::BlockNew(block)) => node.on_block_new(block),
