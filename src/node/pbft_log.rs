@@ -22,7 +22,7 @@ use hex;
 
 use protos::pbft_message::{PbftBlock, PbftMessage, PbftMessageInfo, PbftNewView, PbftViewChange};
 
-use sawtooth_sdk::consensus::engine::PeerMessage;
+use sawtooth_sdk::consensus::engine::{Block, PeerMessage};
 
 use node::error::PbftError;
 use node::config::PbftConfig;
@@ -420,6 +420,16 @@ impl PbftLog {
     pub fn pop_unread(&mut self) -> Option<PeerMessage> {
         self.unreads.pop_front()
     }
+
+    pub fn push_unread_block_new(&mut self, msg: Block) {
+        self.unread_block_new.push_back(msg);
+    }
+
+    pub fn pop_unread_block_new(&mut self) -> Option<Block> {
+        self.unread_block_new.pop_front()
+    }
+}
+
 // Make sure messages are all from different nodes
 fn num_unique_signers(msg_info_list: &Vec<&PbftMessageInfo>) -> u64 {
     let mut received_from: HashSet<&[u8]> = HashSet::new();
