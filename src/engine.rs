@@ -16,6 +16,7 @@
  */
 
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use std::time::Duration;
 
 use sawtooth_sdk::consensus::{engine::*, service::Service};
 
@@ -29,13 +30,28 @@ use node::error::PbftError;
 use std::fs::File;
 use std::io::prelude::*;
 
+macro_rules! hang {
+    () => {
+        let mut t = timing::Timeout::new(Duration::from_secs(5));
+        while !t.is_expired() {}
+    };
+    ( $duration:expr ) => {
+        let mut t = timing::Timeout::new(Duration::from_secs($duration));
+        while !t.is_expired() {}
+    };
+}
+
 pub struct PbftEngine {
     id: u64,
+    death_time: isize,
 }
 
 impl PbftEngine {
-    pub fn new(id: u64) -> Self {
-        PbftEngine { id: id }
+    pub fn new(id: u64, death_time: isize) -> Self {
+        PbftEngine {
+            id: id,
+            death_time: death_time,
+        }
     }
 }
 
@@ -60,6 +76,17 @@ impl Engine for PbftEngine {
 
         let mut node = PbftNode::new(self.id, &config, service);
 
+        let mut prev_seconds;
+        let mut death_timeout = if self.death_time >= 0 {
+            prev_seconds = self.death_time as u64;
+            Some(timing::Timeout::new(Duration::from_secs(
+                self.death_time as u64,
+            )))
+        } else {
+            prev_seconds = 0;
+            None
+        };
+
         debug!("Starting state: {:#?}", node.state);
 
         let mut mod_file = File::create(format!("state_{}.txt", self.id).as_str()).unwrap();
@@ -70,6 +97,20 @@ impl Engine for PbftEngine {
         // Event loop. Keep going until we receive a shutdown message.
         loop {
             let incoming_message = updates.recv_timeout(config.message_timeout);
+
+            if let Some(ref mut timeout) = death_timeout {
+                if timeout.is_expired() {
+                    error!("{}: I died", node.state);
+                    hang!(timeout.duration().as_secs());
+                    error!("{}: I woke back up", node.state);
+                } else {
+                    let remaining = timeout.remaining();
+                    if remaining.as_secs() != prev_seconds {
+                        prev_seconds = remaining.as_secs();
+                        warn!("{}: {} seconds until I die", node.state, prev_seconds);
+                    }
+                }
+            }
 
             let res = match incoming_message {
                 Ok(Update::BlockNew(block)) => node.on_block_new(block),

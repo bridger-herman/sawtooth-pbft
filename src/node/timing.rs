@@ -84,4 +84,12 @@ impl Timeout {
         self.state = TimeoutState::Inactive;
         self.start = Instant::now();
     }
+
+    pub fn remaining(&self) -> Duration {
+        self.duration - (Instant::now() - self.start)
+    }
+
+    pub fn duration(&self) -> Duration {
+        self.duration
+    }
 }
