@@ -290,7 +290,16 @@ impl PbftNode {
                 self.msg_log.add_view_change(vc_message.clone());
 
                 if self.state.mode != PbftMode::ViewChanging {
-                    return Ok(());
+                    // Even if our own timer hasn't expired, still do a ViewChange if we've received
+                    // f + 1 VC messages to prevent being late to the new view party
+                    if self.msg_log.check_msg_against_log(&&vc_message, true, self.state.f + 1).is_ok()
+                        && vc_message.get_info().get_view() > self.state.view
+                    {
+                        info!("{}: Starting ViewChange from a VC message", self.state);
+                        self.start_view_change()?;
+                    } else {
+                        return Ok(());
+                    }
                 }
 
                 self._handle_view_change(&vc_message)?;
@@ -308,6 +317,11 @@ impl PbftNode {
     // be built on top of the current chain head.
     pub fn on_block_new(&mut self, block: Block) -> Result<(), PbftError> {
         info!("{}: Got BlockNew: {:?}", self.state, block.block_id);
+
+        // TODO: Check consensus seal here. If anything in seal is suspicious, then start a view
+        // change
+        // This doesn't make sense to implement until the Consensus API supports batch-checking
+        // functionality.
 
         let pbft_block = pbft_block_from_block(block.clone());
 
@@ -433,6 +447,7 @@ impl PbftNode {
                         e.description().to_string()
                     );
                 } else {
+                    // TODO: Generate consensus seal and serialize it into the finalize_block call
                     debug!("{}: Trying to finalize block", self.state);
                     match self.service.finalize_block(vec![]) {
                         Ok(block_id) => {
@@ -499,6 +514,7 @@ impl PbftNode {
             seq_num: stable_seq_num,
             checkpoint_messages,
         } = if let Some(ref cp) = self.msg_log.latest_stable_checkpoint {
+            info!("{}: No stable checkpoint", self.state);
             cp.clone()
         } else {
             PbftStableCheckpoint {
@@ -509,7 +525,7 @@ impl PbftNode {
 
         let info = make_msg_info(
             &PbftMessageType::ViewChange,
-            self.state.view,
+            self.state.view + 1,
             stable_seq_num,
             self.state.get_own_peer_id(),
         );
@@ -520,12 +536,9 @@ impl PbftNode {
 
         let msg_bytes = vc_msg
             .write_to_bytes()
-            .map_err(|e| PbftError::SerializationError(e));
+            .map_err(|e| PbftError::SerializationError(e))?;
 
-        match msg_bytes {
-            Err(e) => Err(e),
-            Ok(bytes) => self._broadcast_message(&PbftMessageType::ViewChange, &bytes),
-        }
+        self._broadcast_message(&PbftMessageType::ViewChange, &msg_bytes)
     }
 
     // ---------- Methods for handling individual PeerMessages
@@ -736,7 +749,7 @@ impl PbftNode {
             .check_msg_against_log(&vc_message, true, 2 * self.state.f + 1)?;
 
         // Update current view and stop timeout
-        self.state.view += 1;
+        self.state.view = vc_message.get_info().get_view();
         warn!("{}: Updating to view {}", self.state, self.state.view);
 
         // Upgrade this node to primary, if its ID is correct
