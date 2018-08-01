@@ -23,7 +23,7 @@
 
 use std::hash::{Hash, Hasher};
 
-use protos::pbft_message::{PbftBlock, PbftMessage, PbftMessageInfo, PbftViewChange};
+use protos::pbft_message::{PbftBlock, PbftMessage, PbftMessageInfo, PbftNetworkChange, PbftViewChange};
 
 // All message types that have "info" inside of them
 pub trait PbftGetInfo<'a> {
@@ -44,6 +44,7 @@ impl<'a> PbftGetInfo<'a> for &'a PbftViewChange {
 
 impl Eq for PbftMessage {}
 impl Eq for PbftViewChange {}
+impl Eq for PbftNetworkChange {}
 
 impl Hash for PbftMessageInfo {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -58,8 +59,9 @@ impl Hash for PbftBlock {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.get_block_id().hash(state);
         self.get_block_num().hash(state);
-        self.get_summary().hash(state);
         self.get_signer_id().hash(state);
+        self.get_previous_id().hash(state);
+        self.get_summary().hash(state);
     }
 }
 
@@ -77,5 +79,13 @@ impl Hash for PbftViewChange {
             msg.get_info().hash(state);
             msg.get_block().hash(state);
         }
+    }
+}
+
+impl Hash for PbftNetworkChange {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.get_peers().hash(state);
+        self.get_head().hash(state);
+        self.get_tentative().hash(state);
     }
 }

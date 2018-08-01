@@ -59,7 +59,7 @@ impl PbftConfig {
             peers: Vec::new(),
             block_duration: Duration::from_millis(200),
             message_timeout: Duration::from_millis(10),
-            view_change_timeout: Duration::from_millis(4000),
+            view_change_timeout: Duration::from_secs(30),
             checkpoint_period: 100,
             max_log_size: 1000,
         }
@@ -126,7 +126,7 @@ pub fn load_pbft_config(block_id: BlockId, service: &mut Box<Service>) -> PbftCo
     }
     if let Some(s) = sawtooth_settings.get("sawtooth.consensus.pbft.view_change_timeout") {
         if let Ok(view_change_timeout) = s.parse() {
-            config.view_change_timeout = Duration::from_millis(view_change_timeout);
+            config.view_change_timeout = Duration::from_secs(view_change_timeout);
         }
     }
 

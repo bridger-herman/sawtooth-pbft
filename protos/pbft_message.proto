@@ -25,6 +25,8 @@ message PbftBlock {
   uint64 block_num = 3;
 
   bytes summary = 4;
+
+  bytes previous_id = 5;
 }
 
 // Represents all common information used in a PBFT message
@@ -62,3 +64,21 @@ message PbftViewChange {
   // checkpoint mentioned in info's `sequence_number`
   repeated PbftMessage checkpoint_messages = 2;
 }
+
+// Represents the current state of the network, including the active nodes,
+// and the current block.
+message PbftNetworkChange {
+  // The peers in this network configuration
+  repeated bytes peers = 1;
+
+  // The current block that the network is on - used to help nodes catch back
+  // up to the current chain head after they've been offline
+  PbftBlock head = 2;
+
+  // Does this message represent a tentative configuration, or a final
+  // configuration?
+  bool tentative = 3;
+
+  bytes signer_id = 4;
+}
+

@@ -44,6 +44,7 @@ pub enum PbftMessageType {
     BlockNew,
     Checkpoint,
     ViewChange,
+    NetworkChange,
 
     Unset,
 }
@@ -57,6 +58,7 @@ impl fmt::Display for PbftMessageType {
             PbftMessageType::BlockNew => "BN",
             PbftMessageType::Checkpoint => "CP",
             PbftMessageType::ViewChange => "VC",
+            PbftMessageType::NetworkChange => "NC",
             PbftMessageType::Unset => "Un",
         };
         write!(f, "{}", txt)
@@ -84,6 +86,7 @@ impl<'a> From<&'a str> for PbftMessageType {
             "BlockNew" => PbftMessageType::BlockNew,
             "ViewChange" => PbftMessageType::ViewChange,
             "Checkpoint" => PbftMessageType::Checkpoint,
+            "NetworkChange" => PbftMessageType::NetworkChange,
             _ => {
                 warn!("Unhandled PBFT message type: {}", s);
                 PbftMessageType::Unset

@@ -22,7 +22,8 @@ use std::fmt;
 
 use hex;
 
-use protos::pbft_message::{PbftBlock, PbftMessage, PbftMessageInfo, PbftViewChange};
+use protos::pbft_message::{PbftBlock, PbftMessage, PbftMessageInfo, PbftNetworkChange,
+                           PbftViewChange};
 
 use sawtooth_sdk::consensus::engine::{Block, PeerMessage};
 
@@ -51,6 +52,9 @@ pub struct PbftLog {
     low_water_mark: u64,
     high_water_mark: u64,
 
+    // Network-change messages
+    pub network_changes: HashSet<PbftNetworkChange>,
+
     /// Maximum log size, defined from on-chain settings
     max_log_size: u64,
 
@@ -60,7 +64,7 @@ pub struct PbftLog {
     /// How many cycles in between checkpoints
     checkpoint_period: u64,
 
-    /// Backlog of messages (from peers) 
+    /// Backlog of messages (from peers)
     backlog: VecDeque<PeerMessage>,
 
     /// Backlog of blocks (from BlockNews messages)
@@ -110,6 +114,7 @@ impl PbftLog {
         PbftLog {
             messages: HashSet::new(),
             view_changes: HashSet::new(),
+            network_changes: HashSet::new(),
             low_water_mark: 0,
             cycles: 0,
             checkpoint_period: config.checkpoint_period,
@@ -231,6 +236,17 @@ impl PbftLog {
             }
         }
         Ok(())
+    }
+
+    pub fn add_network_change(&mut self, msg: PbftNetworkChange) {
+        self.network_changes.insert(msg);
+    }
+
+    pub fn get_network_changes(&mut self, msg: &PbftNetworkChange) -> Vec<&PbftNetworkChange> {
+        self.network_changes
+            .iter()
+            .filter(|&nc| network_changes_match(msg, nc))
+            .collect()
     }
 
     /// Add a generic PBFT message to the log
@@ -436,6 +452,29 @@ fn num_unique_signers(msg_info_list: &[&PbftMessageInfo]) -> u64 {
 // Check that the views and sequence numbers of two messages match
 fn infos_match(m1: &PbftMessageInfo, m2: &PbftMessageInfo) -> bool {
     m1.get_view() == m2.get_view() && m1.get_seq_num() == m2.get_seq_num()
+}
+
+/// Check that two network change messages match
+fn network_changes_match(nc1: &PbftNetworkChange, nc2: &PbftNetworkChange) -> bool {
+    let peers1 = nc1.get_peers().to_vec();
+    let peers2 = nc2.get_peers().to_vec();
+    peer_lists_match(&peers1, &peers2) && nc1.get_tentative() == nc2.get_tentative()
+        && nc1.get_head() == nc2.get_head()
+}
+
+/// Check to see if the peers in two lists match
+pub fn peer_lists_match(peers1: &Vec<Vec<u8>>, peers2: &Vec<Vec<u8>>) -> bool {
+    for p in peers1.iter() {
+        if !peers2.contains(p) {
+            return false;
+        }
+    }
+    for p in peers2.iter() {
+        if !peers1.contains(p) {
+            return false;
+        }
+    }
+    true
 }
 
 #[cfg(test)]

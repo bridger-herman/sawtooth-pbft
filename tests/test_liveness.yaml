@@ -71,7 +71,7 @@ services:
           sawtooth.consensus.pbft.peers=\\['\\\"'$$(cat /etc/sawtooth/keys/validator.pub)'\\\"','\\\"'$$(cat /etc/sawtooth/keys/validator-1.pub)'\\\"','\\\"'$$(cat /etc/sawtooth/keys/validator-2.pub)'\\\"','\\\"'$$(cat /etc/sawtooth/keys/validator-3.pub)'\\\"'\\] \
           sawtooth.consensus.pbft.block_duration=100 \
           sawtooth.consensus.pbft.checkpoint_period=10 \
-          sawtooth.consensus.pbft.view_change_timeout=4000 \
+          sawtooth.consensus.pbft.view_change_timeout=30 \
           sawtooth.consensus.pbft.message_timeout=10 \
           sawtooth.consensus.pbft.max_log_size=1000 \
           -o config.batch && \
@@ -84,8 +84,7 @@ services:
             --bind component:tcp://eth0:4004 \
             --bind network:tcp://eth0:8800 \
             --bind consensus:tcp://eth0:5050 \
-            --peering static \
-            --peers tcp://validator-1:8800,tcp://validator-2:8800,tcp://validator-3:8800
+            --peering dynamic \
             --scheduler parallel \
     \""
     stop_signal: SIGKILL
@@ -108,8 +107,8 @@ services:
             --bind component:tcp://eth0:4004 \
             --bind network:tcp://eth0:8800 \
             --bind consensus:tcp://eth0:5050 \
-            --peering static \
-            --peers tcp://validator-0:8800,tcp://validator-2:8800,tcp://validator-3:8800
+            --peering dynamic \
+            --seeds tcp://validator-0:8800 \
             --scheduler parallel \
     \""
     stop_signal: SIGKILL
@@ -132,8 +131,8 @@ services:
             --bind component:tcp://eth0:4004 \
             --bind network:tcp://eth0:8800 \
             --bind consensus:tcp://eth0:5050 \
-            --peering static \
-            --peers tcp://validator-0:8800,tcp://validator-1:8800,tcp://validator-3:8800
+            --peering dynamic \
+            --seeds tcp://validator-0:8800 \
             --scheduler parallel \
     \""
     stop_signal: SIGKILL
@@ -156,8 +155,8 @@ services:
             --bind component:tcp://eth0:4004 \
             --bind network:tcp://eth0:8800 \
             --bind consensus:tcp://eth0:5050 \
-            --peering static \
-            --peers tcp://validator-0:8800,tcp://validator-1:8800,tcp://validator-2:8800
+            --peering dynamic \
+            --seeds tcp://validator-0:8800 \
             --scheduler parallel \
     \""
     stop_signal: SIGKILL

@@ -19,6 +19,8 @@
 
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 
+use hex;
+
 use sawtooth_sdk::consensus::{engine::*, service::Service};
 
 use node::PbftNode;
@@ -45,24 +47,33 @@ impl Engine for PbftEngine {
     ) {
         let StartupState {
             chain_head,
-            peers: _peers,
-            local_peer_info,
+            peers,
+            local_peer_info
         } = startup_state;
+
+        let mut deduped_peers = vec![];
+        for peer_info in peers.into_iter() {
+            if !deduped_peers.contains(&peer_info.peer_id) {
+                deduped_peers.push(peer_info.peer_id);
+            }
+        }
+
+        info!(
+            "Starting node {} with peers: {:#?}",
+            &hex::encode(&local_peer_info.peer_id)[..6],
+            deduped_peers
+        );
 
         // Load on-chain settings
         let config = config::load_pbft_config(chain_head.block_id, &mut service);
 
-        let node_id = config
-            .peers
-            .iter()
-            .position(|ref id| id == &&local_peer_info.peer_id)
-            .expect("This node is not in the peers list, which is necessary")
-            as u64;
+        let tmp_node_id = deduped_peers.len() as u64;
+        deduped_peers.push(local_peer_info.peer_id);
 
         let mut working_ticker = timing::Ticker::new(config.block_duration);
         let mut backlog_ticker = timing::Ticker::new(config.message_timeout);
 
-        let mut node = PbftNode::new(node_id, &config, service);
+        let mut node = PbftNode::new(tmp_node_id, &config, deduped_peers, service);
 
         debug!("Starting state: {:#?}", node.state);
 
@@ -82,11 +93,11 @@ impl Engine for PbftEngine {
                 }
                 Ok(Update::BlockCommit(block_id)) => node.on_block_commit(block_id),
                 Ok(Update::PeerMessage(message, _sender_id)) => node.on_peer_message(message),
-                Ok(Update::Shutdown) => break,
-                Ok(Update::PeerConnected(_)) | Ok(Update::PeerDisconnected(_)) => {
-                    error!("PBFT currently only supports static networks");
-                    Ok(())
+                Ok(Update::PeerConnected(peer_info)) => {
+                    node.on_peer_change(peer_info.peer_id, true)
                 }
+                Ok(Update::PeerDisconnected(peer_id)) => node.on_peer_change(peer_id, false),
+                Ok(Update::Shutdown) => break,
                 Err(RecvTimeoutError::Timeout) => Err(PbftError::Timeout),
                 Err(RecvTimeoutError::Disconnected) => {
                     error!("Disconnected from validator");
