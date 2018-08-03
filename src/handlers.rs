@@ -343,7 +343,7 @@ pub fn view_change(
 }
 
 // There should only be one block with a matching ID
-fn get_block_by_id(service: &mut Box<Service>, block_id: BlockId) -> Option<Block> {
+pub fn get_block_by_id(service: &mut Box<Service>, block_id: BlockId) -> Option<Block> {
     let blocks: Vec<Block> = service
         .get_blocks(vec![block_id.clone()])
         .unwrap_or(HashMap::new())

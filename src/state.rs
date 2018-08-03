@@ -52,7 +52,7 @@ pub enum PbftPhase {
 /// Modes that the PBFT algorithm can possibly be in
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum PbftMode {
-    Connecting(usize),
+    Connecting,
     Normal,
     ViewChanging,
     Checkpointing,
@@ -65,7 +65,7 @@ impl fmt::Display for PbftState {
             PbftMode::Normal => "N".to_string(),
             PbftMode::Checkpointing => "C".to_string(),
             PbftMode::ViewChanging => "V".to_string(),
-            PbftMode::Connecting(n) => format!("{}", n),
+            PbftMode::Connecting => format!("{}", self.peer_ids.len()),
         };
 
         let phase = match self.phase {
@@ -89,12 +89,13 @@ impl fmt::Display for PbftState {
 
         write!(
             f,
-            "({} {} {}, seq {}, wb {}), Node {}{:02} ({})",
+            "({} {} {}, seq {}, wb {}, f {}), Node {}{:02} ({})",
             phase,
             mode,
             self.view,
             self.seq_num,
             wb,
+            self.f,
             ast,
             self.id,
             &hex::encode(self.get_own_peer_id())[..6],
@@ -168,11 +169,8 @@ impl PbftState {
     /// Panics if the network this node is on does not have enough nodes to be Byzantine fault
     /// tolernant.
     pub fn new(id: u64, config: &PbftConfig, peers: Vec<PeerId>) -> Self {
-        // Maximum number of faulty nodes in this network. Panic if there are not enough nodes.
-        let f = ((config.peers.len() - 1) / 3) as u64;
-        if f == 0 {
-            panic!("This network does not contain enough nodes to be fault tolerant");
-        }
+        // Number of allowed faulty nodes in this network
+        let f = ((peers.len() - 1) / 3) as u64;
 
         PbftState {
             id,
@@ -184,11 +182,11 @@ impl PbftState {
             } else {
                 PbftNodeRole::Secondary
             },
-            mode: PbftMode::Connecting(peers.len()),
-            pre_checkpoint_mode: PbftMode::Connecting(peers.len()),
+            mode: PbftMode::Connecting,
+            pre_checkpoint_mode: PbftMode::Connecting,
             f,
             max_f: 1,
-            peer_ids: config.peers.clone(),
+            peer_ids: peers.clone(),
             timeout: Timeout::new(config.view_change_timeout),
             working_block: WorkingBlockOption::NoWorkingBlock,
         }
@@ -267,16 +265,17 @@ impl PbftState {
     // Add a peer to the peer list. Returns true if the node has enough connected nodes to be
     // fault-tolerant
     pub fn add_peer(&mut self, peer_id: PeerId) -> bool {
+        let mut added = false;
         if !self.peer_ids.contains(&peer_id) {
             self.peer_ids.push(peer_id);
             self.f = ((self.peer_ids.len() - 1) / 3) as u64;
-            if self.mode != PbftMode::Normal && self.mode != PbftMode::ViewChanging
-                && self.mode != PbftMode::Checkpointing
-            {
-                self.mode = PbftMode::Connecting(self.peer_ids.len());
-            }
+            info!("Added peer: self.f >= self.max_f: {} >= {}", self.f, self.max_f);
+            added = true;
         }
+        added
+    }
 
+    pub fn fault_tolerant(&self) -> bool {
         self.f >= self.max_f
     }
 }

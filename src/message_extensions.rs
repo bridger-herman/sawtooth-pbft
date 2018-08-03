@@ -42,6 +42,12 @@ impl<'a> PbftGetInfo<'a> for &'a PbftViewChange {
     }
 }
 
+impl<'a> PbftGetInfo<'a> for &'a PbftNetworkChange {
+    fn get_msg_info(&self) -> &'a PbftMessageInfo {
+        self.get_info()
+    }
+}
+
 impl Eq for PbftMessage {}
 impl Eq for PbftViewChange {}
 impl Eq for PbftNetworkChange {}
@@ -87,5 +93,6 @@ impl Hash for PbftNetworkChange {
         self.get_peers().hash(state);
         self.get_head().hash(state);
         self.get_tentative().hash(state);
+        self.get_signer_id().hash(state);
     }
 }

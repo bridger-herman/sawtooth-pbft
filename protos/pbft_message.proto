@@ -80,5 +80,6 @@ message PbftNetworkChange {
   bool tentative = 3;
 
   bytes signer_id = 4;
-}
 
+  PbftMessageInfo info = 5;
+}

@@ -242,14 +242,20 @@ impl PbftLog {
         self.network_changes.insert(msg);
     }
 
-    pub fn get_network_changes(&mut self, msg: &PbftNetworkChange) -> Vec<&PbftNetworkChange> {
+    pub fn get_network_changes(&self, msg: &PbftNetworkChange) -> Vec<&PbftNetworkChange> {
         self.network_changes
             .iter()
             .filter(|&nc| network_changes_match(msg, nc))
             .collect()
     }
 
-    /// Add a generic PBFT message to the log
+    /// Clear all previous, out of date network change messages we've received. This can be done
+    /// after one has been accepted (2f + 1 matching received).
+    pub fn clear_network_changes(&mut self) {
+        self.network_changes.clear();
+    }
+
+    // Methods for dealing with PbftMessages
     pub fn add_message(&mut self, msg: PbftMessage) {
         if msg.get_info().get_seq_num() < self.high_water_mark
             || msg.get_info().get_seq_num() >= self.low_water_mark
